@@ -1,14 +1,24 @@
 import { betterAuth } from 'better-auth';
+import type { Auth, BetterAuthOptions } from 'better-auth';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
 import { PrismaService } from '../prisma/prisma.service';
-import { openAPI } from 'better-auth/plugins';
+import { admin, openAPI } from 'better-auth/plugins';
+import { ConfigService } from '@nestjs/config';
 
-export const createAuth = (prisma: PrismaService) =>
-  betterAuth({
+type AuthOptions = BetterAuthOptions & {
+  plugins: [ReturnType<typeof openAPI>, ReturnType<typeof admin>];
+};
+
+export function createAuth(
+  prisma: PrismaService,
+  configService: ConfigService,
+): Auth<AuthOptions> {
+  return betterAuth<AuthOptions>({
     database: prismaAdapter(prisma, { provider: 'postgresql' }), // Make it coherent with your schema file
-    appName: process.env.APP_NAME ?? 'YOUR_APP',
-    secret: process.env.BETTER_AUTH_SECRET ?? 'secret',
-    baseURL: process.env.BETTER_AUTH_BASE_URL || 'http://localhost:3000',
+    appName: configService.get<string>('APP_NAME') ?? 'YOUR_APP',
+    secret: configService.get<string>('BETTER_AUTH_SECRET') ?? 'secret',
+    baseURL:
+      configService.get<string>('BETTER_AUTH_URL') ?? 'http://localhost:3000',
     emailAndPassword: {
       enabled: true,
       requireEmailVerification: false,
@@ -27,10 +37,10 @@ export const createAuth = (prisma: PrismaService) =>
       cookies: {
         sessionToken: {
           name: 'yourapp.session',
-          options: {
+          attributes: {
             httpOnly: true,
-            sameSite: '1max',
-            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            secure: configService.get<string>('NODE_ENV') === 'production',
             path: '/',
           },
         },
@@ -42,5 +52,6 @@ export const createAuth = (prisma: PrismaService) =>
       max: 100,
     },
     trustedOrigins: ['http://localhost:3000', 'http://localhost:3001'],
-    plugins: [openAPI({})],
+    plugins: [openAPI({}), admin()],
   });
+}
